@@ -27,7 +27,8 @@
   import type { Story, StoryPoint } from '$lib/features/stories/shared/types';
 
   import MapWorkspace from '$lib/map/shell/MapWorkspace.svelte';
-  import DualMapPane from '$lib/map/shell/DualMapPane.svelte';
+  import CurrentMapPane from '$lib/map/shell/CurrentMapPane.svelte';
+  import HistoricalPaneBadge from '$lib/features/explore/HistoricalPaneBadge.svelte';
   import GpsTracker from '$lib/map/shell/GpsTracker.svelte';
   import StoryMarkers from '$lib/features/stories/shared/StoryMarkers.svelte';
   import LegendPointsLayer from '$lib/features/shared/LegendPointsLayer.svelte';
@@ -129,7 +130,6 @@
   // The stack can hold a raster archive as well as sheets. Everything below
   // means "the sheet on top", so it reads past one.
   $: sheetOverlays = $layersStore.overlays.filter(isSheetLayer);
-  $: sideAlt = sheetOverlays[1] ?? null;
   $: stackCount = $layersStore.overlays.length;
   // Numbered-legend point overlay — gated to the active (top) overlay map.
   $: activeOverlayMapId = sheetOverlays[0]?.ref.mapId ?? null;
@@ -402,6 +402,9 @@
   }
 
   onMount(async () => {
+    // The fork's primary experience is a synchronized historical/current comparison.
+    // Readers can still switch to Stacked or Lens from Controls.
+    layerStore.setViewMode('dual');
     // MapShell has already put the link's `#@lat,lng,zoomz` camera in the store
     // by now (child onMount runs first), so this default would throw it away.
     if (!hasHashCamera(location.hash)) {
@@ -419,7 +422,11 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <svelte:head>
-  <title>Explore — Vietnam Map Archive</title>
+  <title>Then / Now — Vietnam Map Archive</title>
+  <meta
+    name="description"
+    content="So sánh bản đồ lịch sử Việt Nam với bản đồ hiện nay trong hai khung đồng bộ vị trí, tỷ lệ và góc quay."
+  />
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
@@ -526,6 +533,13 @@
       <GpsDot position={userPosition} />
       <FocusPulse point={focusPoint} />
       <FootprintsLayer mapIds={vectorMapIds} />
+      {#if dualPaneActive}
+        <HistoricalPaneBadge
+          title={activeOverlayMap?.name ?? 'Chọn một bản đồ lịch sử'}
+          year={activeOverlayMap?.year ?? null}
+          opacity={sheetOverlays[0]?.opacity ?? 1}
+        />
+      {/if}
       {#if activeStory}
         <StoryMarkers
           points={activeStory.points}
@@ -544,13 +558,7 @@
 
     <svelte:fragment slot="dual-pane">
       {#if dualPaneActive && shellMap}
-        <DualMapPane
-          primaryMap={shellMap}
-          basemap={basemapSelection}
-          showOverlay={!!sideAlt}
-          overlayOpacity={sideAlt?.opacity ?? 1}
-          activeAllmapsId={sideAlt?.ref.allmapsId ?? ''}
-        />
+        <CurrentMapPane primaryMap={shellMap} initialBasemap={basemapSelection} />
       {/if}
     </svelte:fragment>
 

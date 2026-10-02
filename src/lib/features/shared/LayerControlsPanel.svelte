@@ -3,7 +3,7 @@
 
   Used by both the desktop sidebar and the mobile "Controls" drawer. Houses
   everything that isn't a layer row or a catalog row:
-    • Display mode (Stacked / Lens / Side-by-side)
+    • Display mode (Stacked / Lens / Then / Now)
     • Base map (Maps / Satellite / None)
     • My Location (GPS toggle) — `showGps={false}` drops it, for the same
       reason as `showSearch`: /explore's right rail carries one at its crown
@@ -23,7 +23,7 @@
 
   export let viewMode: ViewMode = 'overlay';
   export let gpsActive: boolean = false;
-  /** When false, "Side-by-side" is hidden — used by tool pages (annotate, story). */
+  /** When false, "Then / Now" is hidden — used by tool pages (annotate, story). */
   export let allowDual: boolean = true;
   /** Show the "Legend points" toggle (only when the active overlay has legend data). */
   export let legendPointsAvailable: boolean = false;
@@ -48,7 +48,7 @@
   const ALL_DISPLAY_MODES: { mode: ViewMode; label: string; icon: string }[] = [
     { mode: 'overlay', label: 'Stacked', icon: '≡' },
     { mode: 'spy', label: 'Lens', icon: '◎' },
-    { mode: 'dual', label: 'Side-by-side', icon: '⊟' },
+    { mode: 'dual', label: 'Then / Now', icon: '⊟' },
   ];
   $: DISPLAY_MODES = allowDual
     ? ALL_DISPLAY_MODES
@@ -218,7 +218,7 @@
   .mcp-lbl {
     /* Hidden on a narrow sidebar; the icons stay readable. This used to be a
        @media (max-width: 320px), which reads the viewport — so on any desktop
-       it never fired and "Side-by-side" pushed the pill row past the panel. */
+       it never fired and "Then / Now" pushed the pill row past the panel. */
     display: inline;
   }
   /* 340px, measured on .mcp: three labelled pills plus the 44px leader need
