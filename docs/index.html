@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f2ea" />
+  <meta name="description" content="WebGIS so sánh bản đồ xưa Việt Nam với bản đồ hiện nay theo hai khung đồng bộ." />
+  <title>MapArchive — Bản đồ xưa ↔ Hiện nay</title>
+  <link rel="preconnect" href="https://tiles.maparchive.vn" crossorigin />
+  <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <style>
+    :root{
+      color-scheme:light;
+      --bg:#f5f2ea;--paper:#fffdf8;--ink:#1a1b1d;--muted:#6b6b67;
+      --line:rgba(20,20,20,.14);--accent:#9a5c2f;--green:#2d8055;
+      --shadow:0 12px 36px rgba(0,0,0,.14);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    button,input{font:inherit}
+    .app{height:100dvh;display:grid;grid-template-rows:64px minmax(0,1fr) 32px;background:var(--bg)}
+    header{display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid var(--line);
+      background:rgba(255,253,248,.96);backdrop-filter:blur(14px);z-index:50}
+    .brand{display:flex;align-items:center;gap:11px;min-width:0}
+    .mark{width:34px;height:34px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;
+      background:linear-gradient(135deg,#e7d8c5,#fffdf8);font-weight:900;letter-spacing:-.04em}
+    .title{display:grid;line-height:1.05}.title strong{font-size:15px}.title span{font-size:11px;color:var(--muted);margin-top:4px}
+    .toolbar{margin-left:auto;display:flex;align-items:center;gap:7px}
+    .btn,.seg button{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;cursor:pointer}
+    .btn{height:34px;padding:0 11px;font-weight:700;font-size:12px}
+    .btn:hover,.seg button:hover{background:#f2eee5}.btn.is-on{background:#1d1f21;color:white;border-color:#1d1f21}
+    .maps{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 1px minmax(0,1fr);position:relative}
+    .divider{background:rgba(0,0,0,.25);z-index:40}
+    .pane{position:relative;min-width:0;overflow:hidden;background:#ddd}
+    .map{position:absolute;inset:0}
+    .pane-head{position:absolute;top:14px;left:14px;z-index:20;max-width:min(420px,calc(100% - 28px));
+      padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,253,248,.92);
+      box-shadow:var(--shadow);backdrop-filter:blur(12px)}
+    .pane-head .kicker{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:900;letter-spacing:.1em}
+    .dot{width:7px;height:7px;border-radius:99px;display:inline-block}.dot.old{background:var(--accent)}.dot.now{background:var(--green)}
+    .pane-head strong{display:block;font-size:14px;margin-top:4px}.pane-head small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+    .controls{position:absolute;right:14px;top:14px;z-index:21;display:flex;gap:6px;align-items:center}
+    .glass{border:1px solid var(--line);border-radius:10px;background:rgba(255,253,248,.92);box-shadow:var(--shadow);
+      backdrop-filter:blur(12px);padding:6px}
+    .seg{display:flex;gap:3px}.seg button{padding:7px 9px;border:0;font-size:11px;font-weight:800;background:transparent}
+    .seg button.active{background:#1d1f21;color:#fff}
+    .opacity{display:flex;align-items:center;gap:7px;padding:2px 7px 2px 4px;color:var(--muted);font-size:10px;font-weight:800}
+    .opacity input{width:100px;accent-color:#92562d}
+    .cross{position:absolute;left:50%;top:50%;z-index:18;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;opacity:.7}
+    .cross:before{content:"";position:absolute;inset:9px;border:1px solid rgba(15,15,15,.75);border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+    .cross:after{content:"";position:absolute;left:14px;top:0;width:1px;height:30px;background:rgba(15,15,15,.55)}
+    .cross i{position:absolute;left:0;top:14px;width:30px;height:1px;background:rgba(15,15,15,.55)}
+    footer{display:flex;align-items:center;gap:12px;padding:0 12px;background:#1d1f21;color:#eae8e2;font-size:10px;z-index:50}
+    footer .coords{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    footer a{color:#fff}.spacer{flex:1}
+    .status-dot{width:6px;height:6px;border-radius:99px;background:#68b587;display:inline-block}
+    .error{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;max-width:80%;padding:9px 12px;
+      border-radius:8px;background:#7b2e2e;color:#fff;font-size:11px;box-shadow:var(--shadow);display:none}
+    .maplibregl-ctrl-attrib{font-size:9px!important}
+    @media(max-width:760px){
+      .app{grid-template-rows:56px minmax(0,1fr) 28px}
+      header{padding:0 10px}.title span{display:none}.toolbar .share-label{display:none}
+      .maps{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) 1px minmax(0,1fr)}
+      .pane-head{top:8px;left:8px;padding:8px 9px}.pane-head strong{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .controls{top:8px;right:8px}.opacity input{width:72px}
+      footer .license-note{display:none}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="mark">MA</div>
+      <div class="title"><strong>MapArchive — Then / Now</strong><span>So sánh bản đồ xưa với không gian hiện nay</span></div>
+    </div>
+    <div class="toolbar">
+      <button id="syncBtn" class="btn is-on" type="button" title="Bật/tắt đồng bộ camera">⛓ <span>Đồng bộ</span></button>
+      <button id="resetBtn" class="btn" type="button">⌂ Vĩnh Long</button>
+      <button id="shareBtn" class="btn" type="button">↗ <span class="share-label">Chia sẻ</span></button>
+    </div>
+  </header>
+
+  <main class="maps">
+    <section class="pane" aria-label="Bản đồ lịch sử">
+      <div id="historicalMap" class="map"></div>
+      <div class="pane-head">
+        <div class="kicker"><span class="dot old"></span>BẢN ĐỒ XƯA / HISTORICAL</div>
+        <strong>Series L7014 · Việt Nam 1:50.000</strong>
+        <small>1966–1984 · lớp raster PMTiles đã nắn chỉnh tọa độ</small>
+      </div>
+      <div class="controls glass">
+        <label class="opacity">MỜ
+          <input id="opacity" type="range" min="0" max="100" value="94" aria-label="Độ trong suốt bản đồ xưa"/>
+          <span id="opacityValue">94%</span>
+        </label>
+      </div>
+      <div class="cross"><i></i></div>
+      <div id="historyError" class="error">Không tải được lớp bản đồ lịch sử từ máy chủ PMTiles.</div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="pane" aria-label="Bản đồ hiện nay">
+      <div id="currentMap" class="map"></div>
+      <div class="pane-head">
+        <div class="kicker"><span class="dot now"></span>HIỆN NAY / CURRENT</div>
+        <strong>Bản đồ nền hiện đại</strong>
+        <small>Cùng vị trí · cùng tỷ lệ · cùng hướng nhìn</small>
+      </div>
+      <div class="controls glass seg" aria-label="Chọn nền hiện đại">
+        <button id="streetBtn" class="active" type="button">Phố</button>
+        <button id="satBtn" type="button">Vệ tinh</button>
+      </div>
+      <div class="cross"><i></i></div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="status-dot"></span><span>WebGIS trực tuyến</span>
+    <span id="coordText" class="coords">10.26994, 106.35831 · z15.00</span>
+    <span class="spacer"></span>
+    <span class="license-note">Historical: Vietnam Map Archive / PCL · Current: © OpenStreetMap contributors / Esri</span>
+    <a href="https://maparchive.vn/" target="_blank" rel="noreferrer">Nguồn VMA ↗</a>
+  </footer>
+</div>
+
+<noscript>Trang này cần JavaScript để hiển thị WebGIS.</noscript>
+
+<script type="module">
+  import maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/+esm';
+  import { Protocol } from 'https://cdn.jsdelivr.net/npm/pmtiles@3.2.0/+esm';
+
+  const INITIAL = { center: [106.35831, 10.26994], zoom: 15, bearing: 0, pitch: 0 };
+  const HISTORICAL = 'https://tiles.maparchive.vn/overlay/l7014-20260913.pmtiles';
+
+  const protocol = new Protocol();
+  maplibregl.addProtocol('pmtiles', protocol.tile);
+
+  const osmSource = {
+    type: 'raster',
+    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    tileSize: 256,
+    maxzoom: 19,
+    attribution: '© OpenStreetMap contributors'
+  };
+
+  const esriSource = {
+    type: 'raster',
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+    tileSize: 256,
+    maxzoom: 19,
+    attribution: 'Tiles © Esri, Maxar, Earthstar Geographics'
+  };
+
+  const historicalStyle = {
+    version: 8,
+    sources: {
+      reference: osmSource,
+      historical: {
+        type: 'raster',
+        url: 'pmtiles://' + HISTORICAL,
+        tileSize: 256,
+        attribution: 'U.S. Army Map Service, Series L7014 — Perry-Castañeda Library Map Collection'
+      }
+    },
+    layers: [
+      { id:'paper', type:'background', paint:{'background-color':'#ede7d9'} },
+      { id:'reference', type:'raster', source:'reference', paint:{'raster-opacity':0.16,'raster-saturation':-0.65} },
+      { id:'historical', type:'raster', source:'historical', paint:{'raster-opacity':0.94} }
+    ]
+  };
+
+  function modernStyle(source) {
+    return {
+      version: 8,
+      sources: { current: source },
+      layers: [
+        { id:'current-bg', type:'background', paint:{'background-color':'#e9edf0'} },
+        { id:'current', type:'raster', source:'current' }
+      ]
+    };
+  }
+
+  function cameraFromHash() {
+    const m = location.hash.match(/^#@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)z(?:,(-?\d+(?:\.\d+)?)r)?$/);
+    if (!m) return INITIAL;
+    return { center:[Number(m[2]),Number(m[1])], zoom:Number(m[3]), bearing:Number(m[4]||0), pitch:0 };
+  }
+
+  const start = cameraFromHash();
+  const common = {
+    center:start.center, zoom:start.zoom, bearing:start.bearing, pitch:0,
+    attributionControl:false, maxZoom:19
+  };
+
+  const oldMap = new maplibregl.Map({ container:'historicalMap', style:historicalStyle, ...common });
+  const currentMap = new maplibregl.Map({ container:'currentMap', style:modernStyle(osmSource), ...common });
+
+  oldMap.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'bottom-left');
+  oldMap.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
+  currentMap.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'bottom-left');
+  currentMap.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
+
+  let syncEnabled = true;
+  let syncing = false;
+  let modernKind = 'street';
+
+  function cameraOf(map){
+    return { center:map.getCenter(), zoom:map.getZoom(), bearing:map.getBearing(), pitch:map.getPitch() };
+  }
+
+  function applyCamera(target,c){
+    target.jumpTo({center:c.center,zoom:c.zoom,bearing:c.bearing,pitch:0});
+  }
+
+  function updateReadout(map){
+    const c=map.getCenter(), z=map.getZoom();
+    document.getElementById('coordText').textContent =
+      c.lat.toFixed(5)+', '+c.lng.toFixed(5)+' · z'+z.toFixed(2);
+    history.replaceState(null,'',
+      '#@'+c.lat.toFixed(5)+','+c.lng.toFixed(5)+','+z.toFixed(2)+'z,'+map.getBearing().toFixed(1)+'r');
+  }
+
+  function sync(source,target){
+    if(!syncEnabled || syncing) return;
+    syncing=true;
+    const c=cameraOf(source);
+    applyCamera(target,c);
+    updateReadout(source);
+    requestAnimationFrame(()=>{syncing=false});
+  }
+
+  oldMap.on('move',()=>sync(oldMap,currentMap));
+  currentMap.on('move',()=>sync(currentMap,oldMap));
+  oldMap.on('moveend',()=>updateReadout(oldMap));
+  currentMap.on('moveend',()=>updateReadout(currentMap));
+
+  oldMap.on('error',(e)=>{
+    const msg=String(e?.error?.message||'');
+    if(msg.includes('PMTiles') || msg.includes('tiles.maparchive.vn') || msg.includes('Bad response')){
+      document.getElementById('historyError').style.display='block';
+    }
+  });
+
+  document.getElementById('opacity').addEventListener('input',(e)=>{
+    const v=Number(e.target.value)/100;
+    document.getElementById('opacityValue').textContent=Math.round(v*100)+'%';
+    if(oldMap.getLayer('historical')) oldMap.setPaintProperty('historical','raster-opacity',v);
+  });
+
+  document.getElementById('syncBtn').addEventListener('click',(e)=>{
+    syncEnabled=!syncEnabled;
+    e.currentTarget.classList.toggle('is-on',syncEnabled);
+    e.currentTarget.querySelector('span').textContent=syncEnabled?'Đồng bộ':'Tách camera';
+    if(syncEnabled) applyCamera(currentMap,cameraOf(oldMap));
+  });
+
+  document.getElementById('resetBtn').addEventListener('click',()=>{
+    applyCamera(oldMap,INITIAL); applyCamera(currentMap,INITIAL); updateReadout(oldMap);
+  });
+
+  document.getElementById('shareBtn').addEventListener('click',async(e)=>{
+    updateReadout(oldMap);
+    try{
+      await navigator.clipboard.writeText(location.href);
+      const label=e.currentTarget.querySelector('.share-label');
+      if(label){const old=label.textContent;label.textContent='Đã chép';setTimeout(()=>label.textContent=old,1200)}
+    }catch{prompt('Sao chép liên kết:',location.href)}
+  });
+
+  function setModern(kind){
+    modernKind=kind;
+    const c=cameraOf(currentMap);
+    currentMap.setStyle(modernStyle(kind==='satellite'?esriSource:osmSource));
+    currentMap.once('style.load',()=>applyCamera(currentMap,c));
+    document.getElementById('streetBtn').classList.toggle('active',kind==='street');
+    document.getElementById('satBtn').classList.toggle('active',kind==='satellite');
+  }
+  document.getElementById('streetBtn').addEventListener('click',()=>modernKind!=='street'&&setModern('street'));
+  document.getElementById('satBtn').addEventListener('click',()=>modernKind!=='satellite'&&setModern('satellite'));
+
+  window.addEventListener('resize',()=>{oldMap.resize();currentMap.resize()});
+  updateReadout(oldMap);
+</script>
+</body>
+</html>
