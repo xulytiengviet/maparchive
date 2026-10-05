@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://tiles.maparchive.vn" crossorigin />
   <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Vietflexmap/VN@6144d565fcf236727577ab3c4471bbe49f86892f/dist/vietflex.css" />
+  <script src="https://cdn.jsdelivr.net/gh/Vietflexmap/VN@6144d565fcf236727577ab3c4471bbe49f86892f/dist/vietflex.js"></script>
   <style>
     :root{
       color-scheme:light;
@@ -49,6 +51,10 @@
       backdrop-filter:blur(12px);padding:6px}
     .seg{display:flex;gap:3px}.seg button{padding:7px 9px;border:0;font-size:11px;font-weight:800;background:transparent}
     .seg button.active{background:#1d1f21;color:#fff}
+    .current-provider{display:grid;gap:2px;padding:8px 10px;line-height:1.05}
+    .current-provider strong{font-size:11px}
+    .current-provider span{font-size:9px;color:var(--muted)}
+    #currentMap.leaflet-container{background:#e9edf0;outline:none}
     .opacity{display:flex;align-items:center;gap:7px;padding:2px 7px 2px 4px;color:var(--muted);font-size:10px;font-weight:800}
     .opacity input{width:100px;accent-color:#92562d}
     .cross{position:absolute;left:50%;top:50%;z-index:18;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;opacity:.7}
@@ -113,9 +119,9 @@
       <div class="pane-head">
         <strong>Bản đồ nay <span class="sep">|</span> Cùng tỷ lệ <span class="sep">|</span> Cùng hướng nhìn</strong>
       </div>
-      <div class="controls glass seg" aria-label="Chọn nền hiện đại">
-        <button id="streetBtn" class="active" type="button">Phố</button>
-        <button id="satBtn" type="button">Vệ tinh</button>
+      <div class="controls glass current-provider" aria-label="Nguồn bản đồ hiện nay">
+        <strong>Vietflex Map</strong>
+        <span>Google Roadmap</span>
       </div>
       <div class="cross"><i></i></div>
     </section>
@@ -123,8 +129,6 @@
 
   <footer>
     <strong>WGS84 <span class="footer-sep">|</span> EPSG:4326</strong>
-    <span class="spacer"></span>
-    <span class="license-note">Current basemap: © OpenStreetMap contributors / Esri</span>
   </footer>
 </div>
 
@@ -148,14 +152,6 @@
     attribution: '© OpenStreetMap contributors'
   };
 
-  const esriSource = {
-    type: 'raster',
-    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: 'Tiles © Esri, Maxar, Earthstar Geographics'
-  };
-
   const historicalStyle = {
     version: 8,
     sources: {
@@ -174,17 +170,6 @@
     ]
   };
 
-  function modernStyle(source) {
-    return {
-      version: 8,
-      sources: { current: source },
-      layers: [
-        { id:'current-bg', type:'background', paint:{'background-color':'#e9edf0'} },
-        { id:'current', type:'raster', source:'current' }
-      ]
-    };
-  }
-
   function cameraFromHash() {
     const m = location.hash.match(/^#@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)z(?:,(-?\d+(?:\.\d+)?)r)?$/);
     if (!m) return INITIAL;
@@ -197,45 +182,79 @@
     attributionControl:false, maxZoom:19
   };
 
-  const oldMap = new maplibregl.Map({ container:'historicalMap', style:historicalStyle, ...common });
-  const currentMap = new maplibregl.Map({ container:'currentMap', style:modernStyle(osmSource), ...common });
+  const oldMap = new maplibregl.Map({
+    container:'historicalMap',
+    style:historicalStyle,
+    ...common,
+    dragRotate:false,
+    pitchWithRotate:false,
+    touchPitch:false
+  });
 
-  oldMap.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'bottom-left');
+  const currentMap = Vietflex.vietflexMap('currentMap', {
+    center:[start.center[1], start.center[0]],
+    zoom:start.zoom,
+    zoomSnap:0.01,
+    zoomDelta:0.25,
+    useLegacyGoogleTiles:true,
+    googleMapType:'roadmap',
+    zoomControl:false,
+    attributionControl:false
+  });
+
+  oldMap.addControl(new maplibregl.NavigationControl({showCompass:false,showZoom:true}),'bottom-left');
   oldMap.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
-  currentMap.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'bottom-left');
-  currentMap.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
+  new Vietflex.ZoomControl({position:'topleft'}).addTo(currentMap);
+  new Vietflex.AttributionControl({position:'bottomright'}).addTo(currentMap);
 
   let syncEnabled = true;
   let syncing = false;
-  let modernKind = 'street';
 
-  function cameraOf(map){
-    return { center:map.getCenter(), zoom:map.getZoom(), bearing:map.getBearing(), pitch:map.getPitch() };
+  function oldCamera(){
+    const c=oldMap.getCenter();
+    return {lng:c.lng,lat:c.lat,zoom:oldMap.getZoom()};
   }
 
-  function applyCamera(target,c){
-    target.jumpTo({center:c.center,zoom:c.zoom,bearing:c.bearing,pitch:0});
+  function currentCamera(){
+    const c=currentMap.getCenter();
+    return {lng:c.lng,lat:c.lat,zoom:currentMap.getZoom()};
   }
 
-  function updateReadout(map){
-    const c=map.getCenter(), z=map.getZoom();
+  function applyOldCamera(c){
+    oldMap.jumpTo({center:[c.lng,c.lat],zoom:c.zoom,bearing:0,pitch:0});
+  }
+
+  function applyCurrentCamera(c){
+    currentMap.setView([c.lat,c.lng],c.zoom,{animate:false});
+  }
+
+  function updateHash(c){
     history.replaceState(null,'',
-      '#@'+c.lat.toFixed(5)+','+c.lng.toFixed(5)+','+z.toFixed(2)+'z,'+map.getBearing().toFixed(1)+'r');
+      '#@'+c.lat.toFixed(5)+','+c.lng.toFixed(5)+','+Number(c.zoom).toFixed(2)+'z,0.0r');
   }
 
-  function sync(source,target){
+  function syncFromOld(){
     if(!syncEnabled || syncing) return;
     syncing=true;
-    const c=cameraOf(source);
-    applyCamera(target,c);
-    updateReadout(source);
+    const c=oldCamera();
+    applyCurrentCamera(c);
+    updateHash(c);
     requestAnimationFrame(()=>{syncing=false});
   }
 
-  oldMap.on('move',()=>sync(oldMap,currentMap));
-  currentMap.on('move',()=>sync(currentMap,oldMap));
-  oldMap.on('moveend',()=>updateReadout(oldMap));
-  currentMap.on('moveend',()=>updateReadout(currentMap));
+  function syncFromCurrent(){
+    if(!syncEnabled || syncing) return;
+    syncing=true;
+    const c=currentCamera();
+    applyOldCamera(c);
+    updateHash(c);
+    requestAnimationFrame(()=>{syncing=false});
+  }
+
+  oldMap.on('move',syncFromOld);
+  oldMap.on('moveend',()=>updateHash(oldCamera()));
+  currentMap.on('move zoom',syncFromCurrent);
+  currentMap.on('moveend zoomend',()=>updateHash(currentCamera()));
 
   oldMap.on('error',(e)=>{
     const msg=String(e?.error?.message||'');
@@ -254,15 +273,18 @@
     syncEnabled=!syncEnabled;
     e.currentTarget.classList.toggle('is-on',syncEnabled);
     e.currentTarget.querySelector('span').textContent=syncEnabled?'Đồng bộ':'Tách camera';
-    if(syncEnabled) applyCamera(currentMap,cameraOf(oldMap));
+    if(syncEnabled) applyCurrentCamera(oldCamera());
   });
 
   document.getElementById('resetBtn').addEventListener('click',()=>{
-    applyCamera(oldMap,INITIAL); applyCamera(currentMap,INITIAL); updateReadout(oldMap);
+    const c={lng:INITIAL.center[0],lat:INITIAL.center[1],zoom:INITIAL.zoom};
+    applyOldCamera(c);
+    applyCurrentCamera(c);
+    updateHash(c);
   });
 
   document.getElementById('shareBtn').addEventListener('click',async(e)=>{
-    updateReadout(oldMap);
+    updateHash(oldCamera());
     try{
       await navigator.clipboard.writeText(location.href);
       const label=e.currentTarget.querySelector('.share-label');
@@ -270,19 +292,8 @@
     }catch{prompt('Sao chép liên kết:',location.href)}
   });
 
-  function setModern(kind){
-    modernKind=kind;
-    const c=cameraOf(currentMap);
-    currentMap.setStyle(modernStyle(kind==='satellite'?esriSource:osmSource));
-    currentMap.once('style.load',()=>applyCamera(currentMap,c));
-    document.getElementById('streetBtn').classList.toggle('active',kind==='street');
-    document.getElementById('satBtn').classList.toggle('active',kind==='satellite');
-  }
-  document.getElementById('streetBtn').addEventListener('click',()=>modernKind!=='street'&&setModern('street'));
-  document.getElementById('satBtn').addEventListener('click',()=>modernKind!=='satellite'&&setModern('satellite'));
-
-  window.addEventListener('resize',()=>{oldMap.resize();currentMap.resize()});
-  updateReadout(oldMap);
+  window.addEventListener('resize',()=>{oldMap.resize();currentMap.invalidateSize(false)});
+  updateHash(oldCamera());
 </script>
 </body>
 </html>
