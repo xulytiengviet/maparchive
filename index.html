@@ -78,7 +78,7 @@
     </div>
     <div class="toolbar">
       <button id="syncBtn" class="btn is-on" type="button" title="Bật/tắt đồng bộ camera">⛓ <span>Đồng bộ</span></button>
-      <button id="resetBtn" class="btn" type="button">⌂ Vĩnh Long</button>
+      <button id="resetBtn" class="btn" type="button">⌂ TP.HCM</button>
       <button id="shareBtn" class="btn" type="button">↗ <span class="share-label">Chia sẻ</span></button>
     </div>
   </header>
@@ -120,7 +120,7 @@
 
   <footer>
     <span class="status-dot"></span><span>WebGIS trực tuyến</span>
-    <span id="coordText" class="coords">10.26994, 106.35831 · z15.00</span>
+    <span id="coordText" class="coords">10.79985, 106.16616 · z9.06</span>
     <span class="spacer"></span>
     <span class="license-note">Historical: Vietnam Map Archive / PCL · Current: © OpenStreetMap contributors / Esri</span>
     <a href="https://maparchive.vn/" target="_blank" rel="noreferrer">Nguồn VMA ↗</a>
@@ -133,7 +133,7 @@
   import maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/+esm';
   import { Protocol } from 'https://cdn.jsdelivr.net/npm/pmtiles@3.2.0/+esm';
 
-  const INITIAL = { center: [106.35831, 10.26994], zoom: 15, bearing: 0, pitch: 0 };
+  const INITIAL = { center: [106.16616, 10.79985], zoom: 9.06, bearing: 0, pitch: 0 };
   const HISTORICAL = 'https://tiles.maparchive.vn/overlay/l7014-20260913.pmtiles';
 
   const protocol = new Protocol();
